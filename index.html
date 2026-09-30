@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+  /* Applies the saved theme before first paint, so the page never
+     flashes dark-then-light (or vice versa) on load. */
+  (function(){
+    try{
+      var saved = localStorage.getItem('uv-theme');
+      document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+    }catch(e){
+      document.documentElement.setAttribute('data-theme','dark');
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Urban Vision — Drone-Based SHM of Bridges &amp; Urban Infrastructure</title>
+<meta name="description" content="DST-NGP sponsored project at JNTU Hyderabad: LiDAR, RGB, and multispectral drone data fused into 3D geospatial models, with YOLOv8-based anomaly detection for structural health monitoring of bridges and urban infrastructure.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<audio id="bg-audio" src="assets/audio/background.mp3" loop preload="auto"></audio>
+
+<div class="meta-bar">
+  <div class="wrap meta-row">
+    <span>DST&ndash;NGP SPONSORED PROJECT</span>
+    <span class="dividerdot">&middot;</span>
+    <span>FILE NGP/GTS-C/ANITHA/JNTU-HYD/TG/2025(G)</span>
+    <span class="dividerdot">&middot;</span>
+    <span>HOSTED AT JNTU HYDERABAD</span>
+  </div>
+</div>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo"><span class="dot"></span>URBAN VISION</div>
+    <nav class="links">
+      <a href="#Home"> Home </a>
+      <a href="#about"> About Project </a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#sensing">Sensors</a>
+      <a href="#spectral">Why Multispectral</a>
+      <div class="nav-dropdown">
+        <a href="#hardware" class="nav-dropdown-trigger" aria-haspopup="true" aria-expanded="false">Pipeline<svg class="caret" viewBox="0 0 10 6" width="9" height="6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <div class="nav-dropdown-menu">
+          <a href="#hardware">Hardware Integration &amp; Data Acquisition</a>
+          <a href="#detection">2D Detection</a>
+          <a href="#reconstruction">3D Reconstruction</a>
+        </div>
+      </div>
+      <a href="#team">Team</a>
+      <a href="#cta">Collaboration</a>
+      <a href="#Mentors">Mentors</a>
+    </nav>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to light mode">
+      <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" width="15" height="15" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+    
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero" id="Home" style="border-bottom:1px solid var(--line);">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">DST&ndash;NGP &middot; DRONE-BASED STRUCTURAL HEALTH MONITORING</div>
+        <h1 style="font-size: 35px;">Structural Health Monitoring <br> of Bridges using <em>Drones and AI</em>.</h1>Urban Vision integrates LiDAR, RGB, and multispectral drone imagery into a precisely calibrated 3D model, leveraging Deep Learning-based AI to automatically detect structural defects in bridges and urban infrastructure—enabling early identification of potential issues before they become visible to the human eye.
+        <p class="lead"></p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#capabilities">Explore the system</a>
+          <a class="btn btn-ghost" href="#detection">View anomaly taxonomy</a>
+        </div>
+        <div class="hero-stats">
+          <div><b>3</b><span>SENSOR MODALITIES</span></div>
+          <div><b>8</b><span>ANOMALY CLASSES</span></div>
+          <div><b>&plusmn;1</b><span>LiDAR POINT ACCURACY</span></div>
+        </div>
+      </div>
+      <div class="scan-panel bracket" id="heroVideoPanel" style="position:relative;">
+        <span class="scan-label tl">POINT_CLOUD.SCAN<br><b>STRUCTURE: BRIDGE_04</b></span>
+        <span class="scan-label br">ELEV. COLORMAP<br><b>LIVE SWEEP</b></span>
+        <video id="heroSweepVideo" autoplay muted loop playsinline preload="auto" aria-label="Live drone-based bridge anomaly sweep">
+          <source src="assets/video/live-sweep.mp4" type="video/mp4">
+        </video>
+
+        <!-- Audio progress bar, overlaid on the video -->
+        <div id="heroAudioProgress" style="
+            position:absolute;
+            left:14px;
+            right:14px;
+            bottom:52px;
+            display:flex;
+            align-items:center;
+            gap:8px;
+            opacity:0;
+            transition:opacity 0.3s ease;
+            pointer-events:none;
+            z-index:6;
+            font-family:'IBM Plex Mono', monospace;
+            font-size:10px;
+            color:#cfe9e6;
+            letter-spacing:0.04em;">
+          <span id="heroAudioTimeCurrent">00:00</span>
+          <div id="heroAudioProgressTrack" style="
+              flex:1;
+              height:4px;
+              background:rgba(255,255,255,0.25);
+              border-radius:2px;
+              position:relative;
+              cursor:pointer;
+              pointer-events:auto;">
+            <div id="heroAudioProgressFill" style="
+                position:absolute;
+                left:0;
+                top:0;
+                height:100%;
+                width:0%;
+                background:linear-gradient(90deg,#49d6c6,#e07a3f);
+                border-radius:2px;"></div>
+            <div id="heroAudioProgressThumb" style="
+                position:absolute;
+                top:50%;
+                left:0%;
+                width:11px;
+                height:11px;
+                background:#ffffff;
+                border-radius:50%;
+                transform:translate(-50%,-50%);
+                box-shadow:0 0 0 2px rgba(10,16,22,0.6), 0 2px 6px rgba(0,0,0,0.5);
+                transition:left 0.05s linear;"></div>
+          </div>
+          <span id="heroAudioTimeTotal">00:00</span>
+        </div>
+
+        <!-- Audio indicator, overlaid on the video -->
+        <div id="heroAudioIndicator" style="
+            position:absolute;
+            bottom:14px;
+            right:14px;
+            display:flex;
+            align-items:center;
+            gap:8px;
+            padding:6px 10px;
+            background:rgba(10,16,22,0.65);
+            border:1px solid rgba(73,214,198,0.35);
+            border-radius:999px;
+            backdrop-filter:blur(4px);
+            color:#49d6c6;
+            font-family:'IBM Plex Mono', monospace;
+            font-size:10px;
+            letter-spacing:0.06em;
+            pointer-events:none;
+            transition:opacity 0.3s ease, border-color 0.3s ease;
+            opacity:0.75;
+            z-index:5;">
+          <svg id="heroAudioIcon" viewBox="0 0 24 24" width="13" height="13" style="flex-shrink:0;">
+            <path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor"/>
+            <path id="heroAudioWave" d="M16 9c1.2 1 1.2 5 0 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" style="opacity:0.3; transition:opacity 0.3s ease;"/>
+          </svg>
+          <span style="display:flex; align-items:flex-end; gap:2px; height:10px;">
+            <i class="hero-audio-bar" style="display:block; width:2px; height:4px; background:currentColor; border-radius:1px; transition:height 0.2s ease, opacity 0.2s ease; opacity:0.35;"></i>
+            <i class="hero-audio-bar" style="display:block; width:2px; height:8px; background:currentColor; border-radius:1px; transition:height 0.2s ease, opacity 0.2s ease; opacity:0.35;"></i>
+            <i class="hero-audio-bar" style="display:block; width:2px; height:5px; background:currentColor; border-radius:1px; transition:height 0.2s ease, opacity 0.2s ease; opacity:0.35;"></i>
+          </span>
+          <span id="heroAudioLabel">AUDIO OFF</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT US -->
+  <section id="about">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 00 &mdash; ABOUT US</div>
+          <h2>About Urban Vision.</h2>
+        </div>
+      </div>
+
+      <div class="about-feature bracket">
+        <div class="about-feature-text">
+          <p id="aboutText" class="about-clamp">UrbanVision is a DST&ndash;NGP (Department of Science &amp; Technology &ndash; National Geospatial Programme) sponsored research project hosted at Jawaharlal Nehru Technological University Hyderabad (JNTUH), focused on advancing automated and scalable Structural Health Monitoring (SHM) of bridges and urban infrastructure. The project integrates drone-based imaging, artificial intelligence, deep learning, LiDAR, multispectral sensing, and geospatial technologies to develop a comprehensive digital workflow for infrastructure inspection, analysis, reconstruction, and visualization.
+<br><br>
+At the data acquisition stage, UrbanVision employs a custom-built drone platform equipped with RGB, LiDAR, and multispectral sensors to capture high-resolution visual, three-dimensional, spectral, and geospatial information from infrastructure. The acquired datasets are processed using advanced computational resources, including High-Performance Computing (HPC) for AI model training on AIRAWAT, India&rsquo;s national supercomputer, enabling the development of efficient deep-learning models for automated infrastructure analysis. The AI system is fine-tuned to identify eight major structural defect classes, transforming large volumes of drone imagery into meaningful and actionable inspection information.
+<br><br>
+Beyond automated analysis, UrbanVision focuses on 3D geospatial reconstruction by integrating RGB, LiDAR, and multispectral datasets using platforms such as Pix4Dmatic and Agisoft Metashape. These technologies enable the generation of detailed point clouds, 3D models, orthomosaics, and spatially accurate digital representations of bridges and urban structures. The reconstructed infrastructure can then be visualized and explored using Blender, Meta Quest 3 Virtual Reality, and an interactive Streamlit dashboard, providing an immersive and intuitive environment for understanding infrastructure conditions.
+<br><br>
+The ultimate goal of UrbanVision is to bridge the gap between advanced geospatial technologies and practical infrastructure management by delivering AI-assisted, spatially accurate, and visually intuitive insights to engineers, researchers, and urban planners without requiring extensive expertise in complex data-processing technologies. By combining intelligent drone-based sensing, deep learning, high-performance computing, 3D geospatial reconstruction, and immersive visualization, UrbanVision aims to contribute toward safer, smarter, scalable, and technology-driven infrastructure monitoring in India.</p>
+          <button type="button" id="aboutToggle" class="about-toggle" aria-expanded="false" aria-controls="aboutText">&hellip;More</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAPABILITIES (4-pillar) -->
+  <section id="capabilities">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 01 &mdash; CAPABILITIES</div>
+          <h2>Four systems, one inspection.</h2>
+        </div>
+        <p>Detection, reconstruction, training, and reporting run as one connected pipeline rather than four separate tools.</p>
+      </div>
+
+      <div class="capability-grid">
+        <div class="capability-card bracket">
+          
+          <div class="idx">01</div>
+          <h3>HPC Model Training</h3>
+          <ul>
+            <li>Trained on the AIRAWAT National Supercomputing Infrastructure</li>
+            <li>Supports large-batch deep learning and hyperparameter optimization</li>
+            <li>Handles large-scale geospatial processing beyond local compute</li>
+            <li>Improves scalability and training efficiency</li>
+          </ul>
+        </div>
+        <div class="capability-card bracket">
+          <div class="idx">02</div>
+          <h3>AI-Powered Anomaly Detection</h3>
+          <ul>
+            <li>Deep Learning based defect detection and classification</li>
+            <li>Detects cracks, spalling, scaling, voids, corrosion, cover detachment, rusting, and peeling</li>
+            <li>Designed for civil infrastructure inspection</li>
+            <li>Optimized for real-time, on-site field inspections</li>
+          </ul>
+        </div>
+        <div class="capability-card bracket">
+          <div class="idx">03</div>
+          <h3>3D Geospatial Reconstruction</h3>
+          <ul>
+            <li>Pix4Dmatic for geospatial defect mapping</li>
+            <li>Generates high-resolution orthomosaics</li>
+            <li>Produces dense point clouds and DSMs</li>
+            <li>Enables spatially accurate, volumetric defect localization</li>
+          </ul>
+        </div>
+        
+        <div class="capability-card bracket">
+          <div class="idx">04</div>
+          <h3>Real-Time Visualization</h3>
+          <ul>
+            <li>Interactive Streamlit dashboard for inspection and reporting</li>
+            <li>Blender-based 3D scene generation</li>
+            <li>Meta Quest 3 VR support for immersive inspection</li>
+            <li>Stakeholder-oriented defect communication</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SENSING -->
+  <section id="sensing">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 02 &mdash; CAPTURE &amp; CALIBRATION</div>
+          <h2>Three sensors, one coordinate frame.</h2>
+        </div>
+        <p>Raw drone footage is only as useful as its calibration. Geometry, texture, and spectral reflectance are co-registered before any detection model runs.</p>
+      </div>
+
+      <div class="sensor-grid">
+        <div class="sensor-card bracket">
+          <svg class="glyph" viewBox="0 0 40 40" fill="none"><path d="M20 4v6M20 30v6M4 20h6M30 20h6M9 9l4.2 4.2M26.8 26.8L31 31M31 9l-4.2 4.2M13.2 26.8L9 31" stroke="#49d6c6" stroke-width="1.6" stroke-linecap="round"/><circle cx="20" cy="20" r="7" stroke="#49d6c6" stroke-width="1.6"/></svg>
+          <div class="idx">01 / SENSOR</div>
+          <h3>LiDAR</h3>
+          <p>Estimation of depth of an anomaly with an accuracy nearly 1 cm that is vital in estimation of anomaly's dimensions(i.e., length, width, depth)</p>
+          <ul class="spec-list">
+            <li><span>Range accuracy</span><span>1 cm</span></li>
+            <li><span>Max range</span><span>150 m</span></li>
+            <li><span>Data rate</span><span>up to 1.15M pts/s</span></li>
+            <li><span>Field of view</span><span>360&deg; / 31&deg;</span></li>
+            <li><span>Sensor weight</span><span>~1.0 kg</span></li>
+          </ul>
+        </div>
+
+        <div class="sensor-card bracket">
+          <svg class="glyph" viewBox="0 0 40 40" fill="none"><rect x="6" y="10" width="28" height="20" rx="1" stroke="#49d6c6" stroke-width="1.6"/><circle cx="20" cy="20" r="5.5" stroke="#49d6c6" stroke-width="1.6"/><rect x="15" y="6" width="6" height="4" stroke="#49d6c6" stroke-width="1.6"/></svg>
+          <div class="idx">02 / SENSOR</div>
+          <h3>RGB</h3>
+          <p>High-resolution visual texture for crack-width estimation, surface classification, and photogrammetric mesh texturing.</p>
+          <ul class="spec-list">
+            <li><span>Role</span><span>Texture + crack width</span></li>
+            <li><span>Fusion engine</span><span>Pix4Dmatic</span></li>
+            <li><span>Output</span><span>Orthomosaic + OBJ mesh</span></li>
+          </ul>
+        </div>
+
+        <div class="sensor-card bracket">
+          <svg class="glyph" viewBox="0 0 40 40" fill="none"><path d="M6 30 L14 12 L20 22 L26 8 L34 30" stroke="#49d6c6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><path d="M6 34h28" stroke="#49d6c6" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <div class="idx">03 / SENSOR</div>
+          <h3>Multispectral</h3>
+          <p>Red Edge reflectance bands expose moisture, salt, and early corrosion that are invisible to RGB.</p>
+          <ul class="spec-list">
+            <li><span>Bands</span><span>R, G, B, NIR, Red Edge</span></li>
+            <li><span>Capture Rate</span><span>3 Hz</span></li>
+            <li><span>Ground Sampling Distance at 60m altitude</span><span>2cm/pixel</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="drone-strip bracket">
+        <div><b>10 kg</b><span>UAV MTOW</span></div>
+        <div><b>45 min</b><span>ENDURANCE</span></div>
+        <div><b>10 km</b><span>RANGE</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY MULTISPECTRAL -->
+  <section id="spectral">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 03 &mdash; SPECTRAL PHYSICS</div>
+          <h2>RGB sees color.<br>Multispectral sees reason.</h2>
+        </div>
+      </div>
+
+      <div class="phys-table bracket">
+        <div class="phys-row phys-head">
+          <span>Criteria</span>
+          <span>RGB alone</span>
+          <span>Multispectral</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Early rust / corrosion</b></span>
+          <span>Reads as a brown stain only after paint fails; shadows confuse the model.</span>
+          <span>An iron-oxide absorption dip near 650&ndash;700nm plus a NIR jump flags the chemical change before flaking.</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Delamination / water ingress</b></span>
+          <span>No visible cue until spalling or cracking appears.</span>
+          <span>Water absorbs SWIR strongly &mdash; wet concrete reflects ~40% less, and thermal bands run 2&ndash;4&deg;C cooler.</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Crack vs. shadow vs. dirt</b></span>
+          <span>All three read as dark pixels, driving high false-alarm rates.</span>
+          <span>A real crack lowers NIR reflectance from cavity depth; shadow dims all bands equally; dirt shifts visible bands only.</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Coating / paint failure</b></span>
+          <span>Can't separate color fade from a lighting change.</span>
+          <span>Pigment degradation shifts the spectral curve &mdash; blue drops first, catching failure before visible peeling.</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Vegetation at joints</b></span>
+          <span>Painted green and plant green look the same.</span>
+          <span>NDVI = (NIR&minus;Red)/(NIR+Red) &gt; 0.3 flags live vegetation directly.</span>
+        </div>
+        <div class="phys-row">
+          <span><b>Cover detachment</b></span>
+          <span>Reads as a dark line and little else.</span>
+          <span>Exposed steel carries a distinct NIR/SWIR signature versus the surrounding concrete.</span>
+        </div>
+      </div>
+  </section>
+
+  <!-- HARDWARE INTEGRATION & DATA ACQUISITION -->
+  <section id="hardware">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 04 &mdash; HARDWARE INTEGRATION &amp; DATA ACQUISITION</div>
+          <h2>One airframe, six coordinated sensors.</h2>
+        </div>
+        <p>Every sensor on the UAV reports to a single onboard compute stack, turning independent measurements into one synchronized capture pass.</p>
+      </div>
+
+      <div class="hw-layout">
+        <div class="hw-copy">
+          <p>The UAV integrates NVIDIA Jetson Orin, LiDAR, MicaSense RedEdge&ndash;P multispectral imaging, RGB imaging, RTK positioning, and DLS for coordinated data acquisition and processing. The sensors continuously collect 3D, spectral, visual, and positioning data, while the flight-control system uses real-time feedback to autonomously follow predefined inspection paths, maintain stability, and maneuver precisely around structures. Jetson Orin processes and fuses these datasets for accurate infrastructure inspection.</p>
+
+          <div class="hw-specs">
+            <div class="hw-spec">
+              <span class="tag">Jetson Orin</span>
+              <p>Onboard edge compute that fuses LiDAR, multispectral, RGB, and RTK streams into one dataset in real time.</p>
+            </div>
+            <div class="hw-spec">
+              <span class="tag">RTK + DLS</span>
+              <p>RTK positioning delivers precise georeferencing while the Downwelling Light Sensor corrects multispectral readings for changing ambient light.</p>
+            </div>
+            <div class="hw-spec">
+              <span class="tag">Autonomous flight control</span>
+              <p>Real-time feedback keeps the UAV on its predefined inspection path, stable and precisely maneuvered around structures.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="hw-photo bracket">
+          <img src="assets/hardware/urbanvision-drone-photo.png" alt="UrbanVision ImgQuad quadrotor drone with LiDAR, RTK sensor, and multispectral camera mounted on top">
+        </div>
+      </div>
+    </div>
+    
+    <div class="wrap recon-video-wrap">
+      <div class="recon-video-panel bracket">
+        <div class="recon-video-head">
+          <div>
+            <div class="eyebrow">Demo - HARDWARE INTEGRATION &amp; DATA ACQUISITION</div>
+          </div>
+          <span class="video-status">HARDWARE INTEGRATION & DATA ACQUISITION</span>
+        </div>
+
+        <div class="video-workspace embedded-video-workspace">
+          <div class="video-player-card embedded-video-card">
+            <video id="detectionVideoPlayer"
+                   autoplay
+                   muted
+                   loop
+                   playsinline
+                   preload="auto"
+                   aria-label="2D anomaly detection demo video">
+              <source src="assets/video/hida.mp4" type="video/mp4">
+              Your browser does not support HTML5 video.
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+    
+
+  <!-- 2D DETECTION -->
+  <section id="detection">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 05 &mdash; 2D ANOMALY DETECTION</div>
+          <h2>Every defect, classified and located.</h2>
+        </div>
+        <p>Each calibrated frame is scored per-pixel and grouped into two defect families, mirroring how field inspectors already log condition ratings.</p>
+      </div>
+
+     <style>
+  .anomaly-thumb{
+    width:90px;
+    height:60px;
+    object-fit:cover;
+    border-radius:10px;
+    display:block;
+    margin-bottom:10px;
+    cursor:pointer;
+    transition:transform 0.35s ease, box-shadow 0.35s ease;
+    transform-origin:left top;
+  }
+  .anomaly-thumb:hover{
+    transform:scale(2.6);
+    box-shadow:0 16px 36px rgba(0,0,0,0.45);
+    position:relative;
+    z-index:5;
+  }
+</style>
+
+<div class="anomaly-cols bracket">
+  <div class="anomaly-col geometry">
+    <div class="anomaly-col-head">
+      <span class="swatch"></span>
+      <h3>Geometry anomalies</h3>
+      <span>&mdash; LOSS OF FORM</span>
+    </div>
+    <div class="defect"><img src="assets/anomalies/crack.jpeg" alt="Crack anomaly example" class="anomaly-thumb"><p><b>Crack</b> — linear fracture in concrete or coating, tracked and trended by width in millimeters.</p></div>
+    <div class="defect"><img src="assets/anomalies/cover_detachment.jpeg" alt="Cover detachment anomaly example" class="anomaly-thumb"><p><b>Cover detachment</b> — loss of bond between concrete cover and reinforcement; an early precursor to spalling.</p></div>
+    <div class="defect"><img src="assets/anomalies/scaling.jpeg" alt="Scaling anomaly example" class="anomaly-thumb"><p><b>Scaling</b> — gradual loss of surface mortar that exposes coarse aggregate.</p></div>
+    <div class="defect"><img src="assets/anomalies/spalling.jpeg" alt="Spalling anomaly example" class="anomaly-thumb"><p><b>Spalling</b> — a fragment of concrete breaking away, often exposing reinforcement beneath.</p></div>
+    <div class="defect"><img src="assets/anomalies/void.jpeg" alt="Void anomaly example" class="anomaly-thumb"><p><b>Void</b> — a subsurface or surface cavity from poor consolidation or material erosion.</p></div>
+  </div>
+
+  <div class="anomaly-col appearance">
+    <div class="anomaly-col-head">
+      <span class="swatch"></span>
+      <h3>Appearance anomalies</h3>
+      <span>&mdash; SURFACE CONDITION</span>
+    </div>
+    <div class="defect"><img src="assets/anomalies/peeling.jpeg" alt="Peeling anomaly example" class="anomaly-thumb"><p><b>Peeling</b> — coating or paint separating and curling away from the substrate.</p></div>
+    <div class="defect"><img src="assets/anomalies/efflorescence.jpeg" alt="Efflorescence anomaly example" class="anomaly-thumb"><p><b>Efflorescence</b> — white mineral salt deposits left as water migrates through concrete.</p></div>
+    <div class="defect"><img src="assets/anomalies/corrosion.jpeg" alt="Corrosion anomaly example" class="anomaly-thumb"><p><b>Corrosion</b> — chemical degradation of embedded or exposed structural steel.</p></div>
+  </div>
+</div>
+
+    <!-- DETECTION VIDEO — 2D ANOMALY DETECTION -->
+    <div class="wrap recon-video-wrap">
+      <div class="recon-video-panel bracket">
+        <div class="recon-video-head">
+          <div>
+            <div class="eyebrow">DETECTION DEMO &mdash; 2D ANOMALY DETECTION</div>
+          </div>
+          <span class="video-status">2D ANOMALY DETECTION</span>
+        </div>
+
+        <div class="video-workspace embedded-video-workspace">
+          <div class="video-player-card embedded-video-card">
+            <video id="detectionVideoPlayer"
+                   autoplay
+                   muted
+                   loop
+                   playsinline
+                   preload="auto"
+                   aria-label="2D anomaly detection demo video">
+              <source src="assets/video/2d.mp4" type="video/mp4">
+              Your browser does not support HTML5 video.
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3D RECONSTRUCTION -->
+  <section id="reconstruction">
+    <div class="wrap recon-layout">
+      <div class="recon-copy">
+        <div class="eyebrow">SECTOR 06 &mdash; 3D RECONSTRUCTION &amp; FUSION</div>
+        <h2 style="margin-top:12px; font-size:clamp(26px,3.4vw,38px);">From point cloud to defect map.</h2>
+        <p>LiDAR depth and RGB imagery are fused through Pix4Dmatic into high-resolution orthomosaics, dense point clouds, and digital surface models — giving every 2D detection a precise, spatially accurate location on the structure, with support for volumetric defect analysis.</p>
+        <div class="recon-metrics">
+          <div><b>Geotagged</b><span>GEOREFERENCING</span></div>
+          <div><b>Dense</b><span>POINT CLOUD + DSM</span></div>
+          <div><b>OBJ</b><span>EXPORT TO BLENDER/VR</span></div>
+        </div>
+      </div>
+      <div class="recon-visual bracket">
+        <canvas id="reconCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- DRONE VIDEO — 3D RECONSTRUCTION -->
+    <div class="wrap recon-video-wrap">
+      <div class="recon-video-panel bracket">
+        <div class="recon-video-head">
+          <div>
+            <div class="eyebrow">DRONE INSPECTION VIDEO &mdash; 3D RECONSTRUCTION</div>
+           
+          </div>
+          <span class="video-status">3D RECONSTRUCTION</span>
+        </div>
+
+        <div class="video-workspace embedded-video-workspace">
+          <div class="video-player-card embedded-video-card">
+            <video id="reconstructionVideoPlayer"
+                   autoplay
+                   muted
+                   loop
+                   playsinline
+                   preload="auto"
+                   aria-label="Drone inspection video">
+              <source src="assets/video/3d reconstruction video1.mp4" type="video/mp4">
+              Your browser does not support HTML5 video.
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="fusion-grid">
+        <div class="fusion-card bracket">
+          <h4>Calibration &amp; Dense Point Cloud</h4>
+          <p>Calibration aligns and optimizes the drone imagery, while dense point-cloud generation converts the calibrated images into a detailed, accurate 3D representation of the bridge or infrastructure.</p>
+        </div>
+        <div class="fusion-card bracket">
+          <h4>Mesh &amp; DSM</h4>
+          <p>Dense point clouds convert to mesh and DSM layers, enabling volumetric defect assessment and slope/elevation analysis.</p>
+        </div>
+        <div class="fusion-card bracket">
+          <h4>Export &amp; Visualization</h4>
+          <p>Final models export as OBJ and import into Blender for photorealistic rendering and VR inspection with Meta Quest 3.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section id="pipeline">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SECTOR 07 &mdash; WORKFLOW</div>
+          <h2>Flight to report, in five stages.</h2>
+        </div>
+        <p>The order matters — each stage feeds data the next stage depends on.</p>
+      </div>
+      <div class="pipeline">
+        <div class="pipe-step"><div class="num">01</div><div><h4>Capture</h4><p>A UAV equipped with LiDAR, RGB, and Red Edge multispectral sensors surveys the structure, capturing high-resolution spatial and spectral data for comprehensive 3D mapping and structural assessment.</p><span class="stage-tag">Input: flight plan, sensor rig</span></div></div>
+        <div class="pipe-step"><div class="num">02</div><div><h4>Fuse &amp; Calibrate</h4><p>LiDAR depth and RGB imagery are aligned using surveyed Ground Control Points for absolute georeferencing accuracy.</p><span class="stage-tag">Output: co-registered dataset</span></div></div>
+        <div class="pipe-step"><div class="num">03</div><div><h4>Detect</h4><p>Deep Learning models trained on the AIRAWAT supercomputing cluster, classifies geometry and appearance anomalies on every frame.</p><span class="stage-tag">Output: per-frame defect masks</span></div></div>
+        <div class="pipe-step"><div class="num">04</div><div><h4>Reconstruct</h4><p>Pix4Dmatic generate high-resolution orthomosaics, dense point clouds, and digital surface models.</p><span class="stage-tag">Output: orthomosaic + point cloud + DSM</span></div></div>
+        <div class="pipe-step"><div class="num">05</div><div><h4>Visualize &amp; Report</h4><p>A Streamlit dashboard, Blender 3D scenes, and Meta Quest 3 VR turn the defect map into a stakeholder-ready inspection report.</p><span class="stage-tag">Output: structured condition report</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEAM -->
+  <section id="team">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">TEAM</div>
+          <h2>Meet the team.</h2>
+        </div>
+        <p>Hosted at Jawaharlal Nehru Technological University, Hyderabad.</p>
+      </div>
+
+      <div class="team-grid">
+        <div class="team-card bracket lead-card">
+          <div class="avatar"><img src="assets/team/kas.jpg" alt="Dr. K. Anitha Sheela"></div>
+          <h4>Dr. K. Anitha Sheela</h4>
+          <span class="role">Principal Investigator &mdash; DST&ndash;NGP Project</span>
+          <p>PROFESSOR OF ECE & BOS CHAIRPERSON DIRECTOR, UIIC, JNTUHUCEST, Hyderabad</p>
+        </div>
+      
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/tvl.jpg" alt="Dr. T. Vijay Lakshmi"></div>
+          <h4>Dr. T. Vijay Lakshmi</h4>
+          <span class="role">Co-Principal Investigator  &mdash; DST&ndash;NGP Project</span>
+          <p>Professor of Environmental Sciences, JNTUHUCEST, Hyderabad</p>
+        </div>
+
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/ksp.jpg" alt="Dr. K.P. Supreethi"></div>
+          <h4>Dr. K.P. Supreethi</h4>
+          <span class="role">Co-Principal Investigator  &mdash; DST&ndash;NGP Project</span>
+          <p>Professor of CSE, JNTUHUCEST, Hyderabad</p>
+        </div>
+
+        <div class="team-card bracket lead-card">
+          <div class="avatar"><img src="assets/team/psl.jpg" alt="Dr. P. Srilakshmi"></div>
+          <h4>Dr. P. Srilakshmi</h4>
+          <span class="role">Co-Principal Investigator  &mdash; DST&ndash;NGP Project</span>
+          <p>Professor of Civil Engg,JNTUHUCEST, Hyderabad</p>
+        </div>
+       
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/js.jpg" alt="Dr. J. Sandhya"></div>
+          <h4>Dr. J. Sandhya</h4>
+          <span class="role">Project Scientist</span>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/lm1.jpeg" alt="Lasya Medikonda"></div>
+          <h4>Lasya Medikonda</h4>
+          <span class="role">Junior Research Fellow</span>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/vr1.jpeg" alt="Venkateswara Rao V"></div>
+          <h4>Venkateswara Rao V</h4>
+          <span class="role">Junior Research Fellow</span>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/aj1.jpeg" alt="Asuwin J"></div>
+          <h4>Asuwin J</h4>
+          <span class="role">Junior Research Fellow</span>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/sc.jpg" alt="Siva Charan"></div>
+          <h4>Siva Charan</h4>
+          <span class="role">Administrative Staff / Lab Assistant</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section" id="cta">
+    <div class="wrap">
+      <section id="collabration">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">COLLABORATION</div>
+              <h1>Meet Our Collaborators & Mentors</h1>
+            </div>
+
+      <div class="team-grid">
+        <div class="team-card bracket lead-card">
+          <div class="avatar"><img src="assets/team/jr.png" alt="Sri Jayesh Ranjan(IAS)"></div>
+          <h4>Sri Jayesh Ranjan(IAS)</h4>
+          <p> Special Chief Secretary, IT&EC Govt. of Telangana</p>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/rml.jpg" alt="Ms. Rama Devi Lanka"></div>
+          <h4>Ms. Rama Devi Lanka</h4>
+          <p>Director, IT E&C Govt. of Telangana</p>
+        </div>
+        <div class="team-card bracket">
+          <div class="avatar"><img src="assets/team/ak.jpg" alt="Dr. Adarsh Kodhanda"></div>
+          <h4>Dr. Adarsh Kodhanda</h4>
+          <span class="role">Principal Investigator &mdash; DST&ndash;NGP Project</span>
+          <p>Founder & CEO of Aigen Labs</p>
+        </div>
+    </div>
+  </section>
+  <section id="Mentors">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">MENTORS</div>
+          <h2>Meet the Mentors</h2>
+        </div>
+        
+      </div>
+
+  <div class="team-grid">
+    <div class="team-card bracket lead-card">
+      <div class="avatar"><img src="assets/team/vc.jpg" alt="Prof. T. Kishen Kumar Reddy,Ph.D"></div>
+      <h4>Dr. T. Kishen Kumar Reddy</h4>
+      <span class="role">Vice-Chancellor, JNTUH</span>
+     
+    </div>
+    
+    <div class="team-card bracket">
+      <div class="avatar"><img src="assets/team/rector.jpeg" alt=Dr. A. Damodaram></div>
+      <h4>Dr. A. Damodaram</h4>
+      <span class="role">Senior Professor of CSE & Rector, JNTUH</span>
+  
+    </div>
+      
+    <div class="team-card bracket">
+      <div class="avatar"><img src="assets/team/Registrar.jpeg" alt=Dr. A. Jaya Laxmi></div>
+      <h4>Dr. A. Jaya Laxmi</h4>
+      <span class="role">Professor of EEE & Registrar, JNTUH</span>
+      
+    </div>
+  </section>
+  </div>
+    <section class="cta-section" id="cta">
+    <div class="cta-actions" style="text-align: center;">
+      <a class="btn btn-primary" href="#capabilities">Review the pipeline</a>
+      <a class="btn btn-ghost" href="#team">See the team</a>
+    </div>
+    </section>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <span>URBAN VISION &mdash; DST&ndash;NGP &copy; 2026</span>
+    <span>17.4933&deg; N, 78.3915&deg; E &mdash; JNTUH KUKATPALLY</span>
+    <span>Sanctioned &#8377;1,26,70,796 &middot; 11/02/2026</span>
+  </div>
+</footer>
+
+<style>
+  @keyframes heroBarPulse {
+    0%, 100% { height:4px; }
+    50% { height:11px; }
+  }
+  #heroAudioIndicator.playing .hero-audio-bar {
+    opacity:1;
+    animation:heroBarPulse 0.9s ease-in-out infinite;
+  }
+  #heroAudioIndicator.playing .hero-audio-bar:nth-child(2){ animation-delay:0.15s; }
+  #heroAudioIndicator.playing .hero-audio-bar:nth-child(3){ animation-delay:0.3s; }
+  #heroAudioIndicator.playing #heroAudioWave{ opacity:1; }
+  #heroAudioIndicator.playing{ opacity:1; border-color:rgba(73,214,198,0.7); }
+</style>
+<script>
+  (function () {
+    const heroVideo = document.getElementById("heroSweepVideo");
+    const bgAudio = document.getElementById("bg-audio");
+    const panel = document.getElementById("heroVideoPanel");
+    const indicator = document.getElementById("heroAudioIndicator");
+    const label = document.getElementById("heroAudioLabel");
+    const progress = document.getElementById("heroAudioProgress");
+    const track = document.getElementById("heroAudioProgressTrack");
+    const fill = document.getElementById("heroAudioProgressFill");
+    const thumb = document.getElementById("heroAudioProgressThumb");
+    const timeCurrent = document.getElementById("heroAudioTimeCurrent");
+    const timeTotal = document.getElementById("heroAudioTimeTotal");
+    if (!heroVideo || !bgAudio || !panel || !indicator) return;
+
+    function formatTime(seconds) {
+      if (!isFinite(seconds) || seconds < 0) seconds = 0;
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+    }
+
+    function updateProgressUI() {
+      if (!fill || !thumb || !timeCurrent || !timeTotal) return;
+      const duration = bgAudio.duration || 0;
+      const pct = duration > 0 ? (bgAudio.currentTime / duration) * 100 : 0;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+      timeCurrent.textContent = formatTime(bgAudio.currentTime);
+      timeTotal.textContent = formatTime(duration);
+    }
+
+    bgAudio.addEventListener("loadedmetadata", updateProgressUI);
+    bgAudio.addEventListener("timeupdate", updateProgressUI);
+
+    if (track) {
+      track.addEventListener("click", function (e) {
+        const rect = track.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        if (isFinite(bgAudio.duration) && bgAudio.duration > 0) {
+          bgAudio.currentTime = ratio * bgAudio.duration;
+          updateProgressUI();
+        }
+      });
+    }
+
+    function startAudio() {
+      const playPromise = bgAudio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // Browser blocked playback — safe to ignore.
+        });
+      }
+      indicator.classList.add("playing");
+      if (label) label.textContent = "AUDIO ON";
+      if (progress) {
+        progress.style.opacity = "1";
+        progress.style.pointerEvents = "auto";
+      }
+    }
+
+    function stopAudio() {
+      bgAudio.pause();
+      indicator.classList.remove("playing");
+      if (label) label.textContent = "AUDIO OFF";
+      if (progress) {
+        progress.style.opacity = "0";
+        progress.style.pointerEvents = "none";
+      }
+    }
+
+    panel.addEventListener("mouseenter", startAudio);
+    panel.addEventListener("mouseleave", stopAudio);
+  })();
+</script>
+<script>
+  /* Theme toggle button: flips data-theme on <html> and remembers the
+     choice in localStorage. The initial theme was already applied by
+     the small script at the top of <head>, before first paint. */
+  (function(){
+    var toggle = document.getElementById('theme-toggle');
+    if(!toggle) return;
+
+    function currentTheme(){
+      return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    }
+    function syncAria(){
+      var isLight = currentTheme() === 'light';
+      toggle.setAttribute('aria-pressed', isLight ? 'true' : 'false');
+      toggle.setAttribute('aria-label', isLight ? 'Switch to dark mode' : 'Switch to light mode');
+    }
+    syncAria();
+
+    toggle.addEventListener('click', function(){
+      var next = currentTheme() === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try{ localStorage.setItem('uv-theme', next); }catch(e){}
+      syncAria();
+    });
+  })();
+</script>
+<script src="script.js" defer></script>
+</body>
+</html>
